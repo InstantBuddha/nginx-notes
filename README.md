@@ -10,6 +10,8 @@ Contexts: like blocks of code with key value pairs inside
 
 ## Most basic example
 
+In the tutorial they included:
+
 ```conf
 http {
     server {
@@ -21,7 +23,18 @@ http {
 events {}
 ```
 
+Because of restrictions, I needed to change it to:
+
+```conf
+server {
+    listen 80;
+    root /html-files;
+}
+```
+
 ## Mime types
+
+The tutorial goes on:
 
 Instead of adding all the types separately like this:
 
@@ -55,6 +68,17 @@ http {
 }
 
 events {}
+```
+
+I needed to add it like this:
+
+```conf
+include mime.types;
+
+server {
+    listen 80;
+    root /html-files;
+}
 ```
 
 ## The location block or location context
