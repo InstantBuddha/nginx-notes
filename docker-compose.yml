@@ -1,0 +1,9 @@
+services:
+  nginx-practice:
+    image: nginx:latest
+    container_name: nginx-practice
+    ports:
+      - "80:80"
+    volumes:
+      - ./html-files:/html-files
+      - ./nginx-config:/etc/nginx/conf.d
