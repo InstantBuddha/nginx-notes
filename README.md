@@ -10,6 +10,12 @@ Although docker compose down and up swwm to work better to restart nginx and loa
 docker exec nginx-practice nginx -s reload
 ```
 
+## Curl to check nginx
+
+```bash
+curl -I localhost:80/
+```
+
 ## Terminology
 
 Directives: like key-walue pairs
@@ -342,3 +348,47 @@ server {
   - Proxies requests to one of the servers defined in the `backendserver` group for load balancing.
 
 With this configuration, nginx will act as a reverse proxy and load balancer, distributing incoming requests across multiple backend servers (`127.0.0.1:1111` and `127.0.0.1:2222`). This setup improves scalability, reliability, and performance by distributing the request load across multiple servers.
+
+## Nginx Cache - not working tutorial
+
+following [this tutorial](https://www.youtube.com/watch?v=wp4gjE8JyBA) that has [this repository](https://github.com/veryacademy/yt-nginx-mastery-series/blob/main/part-5-nginx-cache-introduction/nginx/conf.d/default.conf)
+
+The proxy_cache part of the default.conf
+
+```conf
+# It is important that the following is actually ONLY ONE LINE, it is just separated for readability
+# Therefore, the semicolon is only needed in the end!
+proxy_cache_path /var/cache/nginx   # obivously the folder in the container where we want to store the cache
+                    keys_zone=NginxCache:20m    # this is mandatory: the name and the size of the shared memory zone that stores the metadata of cached items. Here m means megabytes
+                    inactive=60m    # How long we want to store this data (60 minutes)
+                    levels=1:2  # to define file structure
+                    max_size=10g;   # this is the maximum amount of data we want to store. g is for gigabytes
+```                    
+
+Questions related to this setup:
+
+1. **What happens if the memory limit is reached but all the files have been accessed in the last 60 minutes. Are any cached files deleted?**
+**Memory Limit Reached but Files Accessed Recently (within 60 minutes):**
+   If the memory limit for your nginx cache (`max_size=10g`) is reached but all the cached files have been accessed within the last 60 minutes (`inactive=60m`), nginx will not delete any cached files immediately. The `inactive` parameter specifies how long a cached item can remain unused (not accessed) before it's considered eligible for deletion when space is needed. Since all files have been accessed recently, they are considered active and will not be removed even if the cache is at its size limit. Only files that exceed the `inactive` period and are not accessed during that time become candidates for removal when space is needed.
+
+2. **Furthermore, what happens if the cache limit is not reached but the files have not been accessed in the last 60 minutes? Are any cached files deleted?**
+**Files Not Accessed within the Last 60 Minutes but Cache Limit Not Reached:**
+   If the cache limit (`max_size=10g`) has not been reached but some files have not been accessed within the last 60 minutes (`inactive=60m`), these inactive files are eligible for removal when the cache needs to make space for new content or to stay within its defined memory limit. When nginx needs to free up space and if there are cached items that have not been accessed within the `inactive` period, those items will be candidates for deletion, even if the overall cache size hasn't hit its maximum limit (`max_size`). 
+
+Inside the location / { block}
+
+```conf
+location / {
+        proxy_pass http://demo;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+        proxy_cache NginxCache; # here we have to reference the cache zone defined above. Only this is mandatory.
+        proxy_cache_min_uses 5;
+        
+        proxy_cache_methods GET;
+        proxy_cache_valid 200 10m;
+        proxy_cache_valid 404 5m;
+
+        add_header X-Proxy-Cache $upstream_cache_status;
+    }
+```        

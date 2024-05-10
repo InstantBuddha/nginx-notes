@@ -7,3 +7,7 @@ services:
     volumes:
       - ./html-files:/html-files
       - ./nginx-config:/etc/nginx/conf.d
+      - nginx-practice-cache:/var/cache/nginx  # Volume for Nginx cache data
+
+volumes:
+  nginx-practice-cache:  # Define a named volume for Nginx cache
