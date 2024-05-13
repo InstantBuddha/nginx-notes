@@ -185,3 +185,25 @@ To test user agents:
 ```bash
 curl -v -H "User-Agent: Go-http-client/1.1" http://localhost:80/
 ```
+
+To block long urls:
+```conf
+    # Use regular expression to deny requests with too long url
+    location ~ '.{101,}?' {
+    return 403;
+    }
+```
+
+To test it (User agent needs to be renamed because I block curl)
+IT is important that the part after the localhost:80/ needs to be longer than 101 chars for the test to work!!!!
+```bash
+curl -v -H "User-Agent: I-made-it-up" http://localhost:80/very/long/url/that/exceeds/the/maximum/length/allowed/for/nginx/testing/purposesasasaaaaaaaaaaaaaaaaaaaaa
+```
+
+Just added this, why not:
+```conf
+ # Limit request methods to only GET and POST
+    if ($request_method !~ ^(GET|POST)$ ) {
+        return 405;
+    }
+```    
