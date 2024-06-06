@@ -207,3 +207,24 @@ Just added this, why not:
         return 405;
     }
 ```    
+
+## /actuator/gateway/routes
+
+The /actuator/gateway/routes endpoint can be used for malicious purposes or for health checks. Now I will just disable it.
+
+I added the rule:
+```conf
+# Actuator might be used for health checks but for malicious activities, so I just disable the whole thing
+    location /actuator/ {
+        deny all;
+    }
+```    
+
+To test:
+```bash
+curl -v -H "User-Agent: I-made-it-up" http://localhost:80/actuator/gateway/routes
+
+curl -v -H "User-Agent: I-made-it-up" http://localhost:80/actuator/health
+
+curl -v -H "User-Agent: I-made-it-up" http://localhost:80/actuator/info
+```
