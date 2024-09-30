@@ -1,0 +1,1 @@
+These are the files originally in the (Nginx Mastery Series of Very Academy)[https://www.youtube.com/playlist?list=PLOLrQ9Pn6cawvMA5JjhzoQrnKbYGYQqx1] but I needed to modify them to make them work.

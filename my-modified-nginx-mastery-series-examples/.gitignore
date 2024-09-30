@@ -1,0 +1,24 @@
+.DS_Store
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+
+# Django Database: it is not ignored as this is a demo project.
+#db.sqlite3
+
+# These are practice project files, so environment variables are not ignored for simplicity
+#.env
+
+# Static files
+staticfiles/
+
+# Node modules
+node_modules/
+
+# IDE/editor-specific files
+.vscode/
+.idea/
+
+# Logs
+*.log
