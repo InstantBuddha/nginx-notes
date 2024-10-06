@@ -10,6 +10,9 @@ __pycache__/
 # These are practice project files, so environment variables are not ignored for simplicity
 #.env
 
+# Although this is a practice project, .htpasswd should be ignored by git. It needs to be created when the project is pulled.
+/part-8-nginx-rate-limiting/nginx/pwd/.htpasswd
+
 # Static files
 staticfiles/
 

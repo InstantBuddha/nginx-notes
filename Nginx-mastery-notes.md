@@ -15,6 +15,12 @@ Based on [this playlist](https://www.youtube.com/playlist?list=PLOLrQ9Pn6cawvMA5
       - [1. **Separate Rate Limits for API and Static Assets**](#1-separate-rate-limits-for-api-and-static-assets)
       - [2. **Use the `burst` and `nodelay` Parameters**](#2-use-the-burst-and-nodelay-parameters)
       - [3. **Rate Limiting by User, Not by Resource**](#3-rate-limiting-by-user-not-by-resource)
+  - [Django Admin Login Rate Limiting](#django-admin-login-rate-limiting)
+    - [How `burst` and `delay` Work Together:](#how-burst-and-delay-work-together)
+    - [How It Actually Works in Your Case:](#how-it-actually-works-in-your-case)
+    - [Summary:](#summary)
+  - [Basic HTTP Security](#basic-http-security)
+    - [My modifications](#my-modifications)
 
 
 ## Split A/B testing
@@ -265,3 +271,108 @@ However, this can get tricky in modern environments where users are behind share
 - **Adjust the rate and burst values** based on the typical user behavior on your site to avoid negatively impacting legitimate users while still deterring abuse.
 
 This way, you can have rate limits that protect against malicious activity while maintaining a smooth user experience.
+
+## Django Admin Login Rate Limiting
+
+1. Move the rate limiting rule to location /admin/login/
+  Here, burst and delay are enabled.
+
+  ```conf
+  location /admin/login/ {
+        limit_req zone=limitbyaddr burst=10 delay=5;
+        proxy_pass http://demo;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+    }
+  ```
+
+2. Can be tested with cURL:
+  ```bash
+  for i in {1..15}; do curl -H "X-Forwarded-For: 190.168.0.100" -I http://127.0.0.1/admin/login/; sleep 0.1; done
+  ```
+### How `burst` and `delay` Work Together:
+
+- **`rate=1r/s`**: This means that, on average, the client is allowed to send **1 request per second**.
+- **`burst=10`**: This allows the client to exceed the rate limit by up to **10 extra requests** before Nginx starts rejecting them. In other words, the first 10 excess requests are **queued** rather than being rejected.
+- **`delay=5`**: This parameter tells Nginx that after exceeding the burst, instead of rejecting the excess requests immediately, it should **process them at a slower pace**. Nginx will delay processing these requests so that they are spread over time.
+
+**Why All Requests Return 200:**
+
+- The **first request** is processed instantly because it fits within the `1 request/second` rate.
+- The next **10 requests** fall within the allowed `burst`, meaning they are accepted but **queued for delayed processing**.
+- Because of the **`delay=5`** parameter, once the queue exceeds the `burst`, Nginx starts delaying subsequent requests, but it doesn’t immediately reject them. So, Nginx continues to process them but at a slower rate.
+
+The delay of `5` here means that even if the client sends requests faster than 1 per second, Nginx processes them gradually, effectively spreading them out over a longer period of time. In your case, the queue grows, but since there is no instantaneous rejection, all requests are handled, though with a delay.
+
+**Why You’re Not Seeing 429 Errors:**
+The reason you're not seeing **429 errors** is because the **burst** of `10` allows the client to send 10 extra requests beyond the rate limit before Nginx starts dropping requests. The **`delay`** ensures that instead of rejecting requests beyond the burst immediately, they are handled at a slower rate.
+
+With your current setup:
+- Nginx will only start rejecting requests (with 429) **if the incoming rate is faster than both the allowed rate and the `burst` limit**, and the queue can't keep up.
+  
+So, with a burst of 10 and a delay, Nginx is giving you some flexibility: it will queue the excess requests and process them as bandwidth allows, without dropping them unless the queue becomes overwhelming.
+
+### How It Actually Works in Your Case:
+1. **First request**: Instant response (within 1r/s limit).
+2. **Next 10 requests**: Accepted and processed as part of the `burst`.
+3. **Subsequent requests**: Delayed due to the `delay=5`, but still processed and returned with 200 status codes.
+
+### Summary:
+- The **burst** allows for temporary spikes in requests without rejection.
+- The **delay** ensures requests exceeding the burst are processed more slowly, but not rejected unless the queue is overwhelmed.
+- To see `429` errors, either remove the `delay` or lower the `burst` value to make Nginx start rejecting requests sooner.
+
+
+## Basic HTTP Security 
+
+Although it is called HTTP, it works with HTTPS too.
+
+In VsCode in the Docker extension we can right click on the container and attach shell instead of shing in.
+
+1. First, changed the Dockerfile
+2. Sh in or use the shell from the Docker extension and run the command:
+```sh
+htpasswd -c /etc/pwd/.htpasswd user1
+```
+
+And then add the password.
+3. After this, we can apply changes to the default.conf:
+```conf
+    location /test/ {
+        proxy_pass http://demo;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+
+        # This is for the http password security
+        auth_basic "Secure Area";
+
+        # This needs to point to the auth user file we created with the sh command
+        auth_basic_user_file /etc/pwd/.htpasswd;
+    }
+```
+4. And when we try to open http://127.0.0.1/test/ we will be welcomed with a Username and Password login page.
+
+### My modifications
+
+Unfortunately, with this Docker setup the password file does not persist across container restarts, so modifications are needed in Docker.
+
+1. The docker-compose.yml needed to be modified to make the pwd folder a bind mount:
+```yaml
+nginx:
+    build:
+      context: ./nginx/
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/conf.d/:/etc/nginx/conf.d/
+      - static_files:/home/app/staticfiles
+      - ./nginx/pwd:/etc/pwd
+```
+
+2. And then the file created by the following command would persist among restarts:
+```sh
+htpasswd -c /etc/pwd/.htpasswd user1
+```
+
+1. It is important to note that **I added the file to the gitignore**, therefore, **it needs to be created every time** the repo is pulled new.
+
