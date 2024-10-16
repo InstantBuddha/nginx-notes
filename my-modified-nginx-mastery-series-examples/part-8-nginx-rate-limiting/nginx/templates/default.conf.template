@@ -7,7 +7,7 @@ upstream demo {
 }
 
 server {
-    listen 80;
+    listen ${NGINX_PORT};
 
     # HERE rate limiting is applied everywhere
     #This way requests are blocked with 429
@@ -18,20 +18,20 @@ server {
     # nodelay might be used as well for a better user experience
     #limit_req zone=limitbyaddr burst=10 nodelay;
     location / {
-        proxy_pass http://demo;
+        proxy_pass http://${NGINX_UPSTREAM};
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header Host $host;
     }
 
     location /admin/login/ {
         limit_req zone=limitbyaddr burst=10 delay=5;
-        proxy_pass http://demo;
+        proxy_pass http://${NGINX_UPSTREAM};
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header Host $host;
     }
 
     location /test/ {
-        proxy_pass http://demo;
+        proxy_pass http://${NGINX_UPSTREAM};
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header Host $host;
 
@@ -52,9 +52,14 @@ server {
         # like this, ip address ranges can be denied
         #deny 172.24.0.1/16;
 
-        proxy_pass http://demo;
+        proxy_pass http://${NGINX_UPSTREAM};
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header Host $host;
+    }
+
+    location /${TEMPLATE_LOCATION}/ {
+        return 200 "${TEMPLATE_LOCATION}";
+        add_header Content-Type text/plain;
     }
 
     location /static/ {

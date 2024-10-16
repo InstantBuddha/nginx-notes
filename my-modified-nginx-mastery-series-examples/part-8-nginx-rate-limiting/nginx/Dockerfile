@@ -7,3 +7,6 @@ RUN mkdir -p /home/app/staticfiles
 
 # For creating the user and password
 RUN mkdir -p /etc/pwd
+
+# For the folder of the secure url
+RUN mkdir -p /home/secure

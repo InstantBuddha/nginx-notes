@@ -21,6 +21,10 @@ Based on [this playlist](https://www.youtube.com/playlist?list=PLOLrQ9Pn6cawvMA5
     - [Summary:](#summary)
   - [Basic HTTP Security](#basic-http-security)
     - [My modifications](#my-modifications)
+  - [Restricting Access Based on IP Addresses](#restricting-access-based-on-ip-addresses)
+    - [Blocking ip ranges and Understanding CIDR Notation](#blocking-ip-ranges-and-understanding-cidr-notation)
+  - [Nginx Secure URL (secure link directive)](#nginx-secure-url-secure-link-directive)
+  - [Environment variables](#environment-variables)
 
 
 ## Split A/B testing
@@ -376,3 +380,79 @@ htpasswd -c /etc/pwd/.htpasswd user1
 
 1. It is important to note that **I added the file to the gitignore**, therefore, **it needs to be created every time** the repo is pulled new.
 
+
+## Restricting Access Based on IP Addresses
+
+These rules are processed in order. So if allow is first, the ip is allowed, if it is after deny all, it is forbidden.
+
+It is important that if we deny ip addresses ONLY THE OTHER IP ADDRESS DIRECTIVES WILL NOT BE READ
+
+### Blocking ip ranges and Understanding CIDR Notation
+
+In your example:
+```
+deny 172.24.0.1/16;
+```
+This is CIDR (Classless Inter-Domain Routing) notation, which allows you to specify ranges of IP addresses. The `/16` means that the first 16 bits of the IP address are fixed (i.e., `172.24`), and the remaining bits can vary.
+
+- **/16** means that the first two numbers (`172.24`) are fixed, and the last two numbers (`X.X`) can range from `0.0` to `255.255`. So it effectively blocks **all IPs from `172.24.0.0` to `172.24.255.255`**.
+
+## Nginx Secure URL (secure link directive)
+
+Using [Tthis tutorial](https://www.f5.com/company/blog/nginx/securing-urls-secure-link-module-nginx-plus)
+
+The module provides two methods. Only one of them can be configured in a given http, server, or location context.
+
+- The first and simpler mode is enabled by the secure_link_secret directive.
+- The second, more flexible, method is enabled by the secure_link and secure_link_md5 directives. Here the encoded string is an MD5 hash of variables defined in the NGINX Plus configuration file. 
+
+## Environment variables
+
+1. First, we needed to modify the docker-compose.yml like this, to replace our original config file with the templates and to add a .env file:
+
+```yml
+nginx:
+    build:
+      context: ./nginx/
+    ports:
+      - 80:80
+    volumes:
+      # This was the original config file that we used throughout the tutorial, it is going to be replaced with the templates
+      #- ./nginx/conf.d/:/etc/nginx/conf.d/
+      # This is what we use when we have the environment variables:
+      - ./nginx/templates/:/etc/nginx/templates
+      - static_files:/home/app/staticfiles
+      - ./nginx/pwd:/etc/pwd
+      - ./nginx/secure/:/home/secure/
+    env_file:
+      - ./.env/dev.env
+```      
+
+2. After that we added the following to the dev.env (which already contained the django variables):
+
+```env
+# These are for Nginx
+NGINX_PORT=80
+NGINX_UPSTREAM=demo
+```
+
+3. After that I just used the existing default.conf, copied it to the templates folder and renamed it to default.conf.template. Environment variables can be referred to using this syntax: ${VARIABLE_NAME}
+
+For example:
+```conf
+#...
+server {
+    listen ${NGINX_PORT};
+
+    location / {
+        proxy_pass http://${NGINX_UPSTREAM};
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+    }
+
+    location /${TEMPLATE_LOCATION}/ {
+        return 200 "${TEMPLATE_LOCATION}";
+        add_header Content-Type text/plain;
+    }    
+}    
+```   
