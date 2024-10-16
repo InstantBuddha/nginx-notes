@@ -2,8 +2,9 @@
 
 - [nginx-notes](#nginx-notes)
   - [The basics](#the-basics)
-  - [My Nginx security rules notes](#my-nginx-security-rules-notes)
   - [My Nginx mastery course notes](#my-nginx-mastery-course-notes)
+  - [My new Nginx security notes](#my-new-nginx-security-notes)
+  - [My Nginx old security rules notes](#my-nginx-old-security-rules-notes)
   - [Reload nginx](#reload-nginx)
   - [Curl to check nginx](#curl-to-check-nginx)
   - [Trailing slash !important](#trailing-slash-important)
@@ -18,13 +19,17 @@
 
 Basic rules and definitions can be found [in this file](basics.md)
 
-## My Nginx security rules notes
-
-Far from perfect. My solutions can be found [in this file](Nginx-security-notes.md)
-
 ## My Nginx mastery course notes
 
 My notes can be found [here](Nginx-mastery-notes.md)
+
+## My new Nginx security notes
+
+My new, more organized security notes are collected [in this file](Nginx-new-security-notes.md)
+
+## My Nginx old security rules notes
+
+Far from perfect. My solutions can be found [in this file](Nginx-security-notes-old.md)
 
 ## Reload nginx
 
