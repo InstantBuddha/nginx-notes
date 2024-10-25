@@ -103,20 +103,172 @@ If you don’t enable the `proxy_hide_header` option in Nginx, your system may e
 
 ## Nginx OWASP/ModSecurity-crs
 
-This is the docker-compose.yml with which I could make it run initially:
+### First run
+
+The [documentation](https://github.com/coreruleset/modsecurity-crs-docker/blob/main/README.md) states:
+You mount your local file, e.g. nginx/default.conf as the new template: /etc/nginx/templates/conf.d/default.conf.template. You can do this similarly with other files.
+
+This is the reason why mounting the different config files with the standard method did not work. This is the proper way of doing it:
+
 ```yml
 services:
   nginx-modsecurity:
     image: owasp/modsecurity-crs:4.7.0-nginx-202410090410
     ports:
-      - "80:80"
+      - "8080:8080" # Use ports 8080 and 8443 as specified by the documentation.
+      - "8443:8443"
+    environment:
+      SERVERNAME: localhost
+      PARANOIA: 1
+      BLOCKING_PARANOIA: 1
+      ANOMALY_INBOUND: 5
+      ANOMALY_OUTBOUND: 4
     volumes:
       - ./html-files:/html-files
-      #- ./nginx-config/conf.d:/etc/nginx/conf.d/ # The read only was removed :ro #directory of default.conf
-      #- ./nginx-config/nginx.conf:/etc/nginx/nginx.conf #:ro The read only was removed  # Bind only nginx.conf FILE!
-    command: nginx -g "daemon off;"
+      # Mount default.conf as a template
+      - ./nginx-config/conf.d/default.conf:/etc/nginx/templates/conf.d/default.conf.template
+      # Mount nginx.conf as a template
+      - ./nginx-config/nginx.conf:/etc/nginx/templates/nginx.conf.template
 ```
-In the original package the original default.conf looked like this:
+
+### owasp default.conf explained
+
+This is the original default.conf template that was included in the package, only with my basic modifications to serve the contents of html-files/ instead of a backend server:
+
+```conf
+# Nginx configuration for both HTTP and SSL
+
+server_tokens ${SERVER_TOKENS};
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen ${PORT} default_server;
+
+    server_name ${SERVER_NAME};
+    #set $upstream ${BACKEND};
+    set $always_redirect ${NGINX_ALWAYS_TLS_REDIRECT};
+
+    PROXY_SSL_CONFIG
+
+    location / {
+        client_max_body_size 0;
+
+        if ($always_redirect = on) {
+            return 301 https://$host$request_uri;
+        }
+
+        #include includes/proxy_backend.conf;
+
+        index index.html index.htm;
+        #root /usr/share/nginx/html;
+        root /html-files;
+    }
+
+    include includes/location_common.conf;
+
+}
+
+server {
+    listen ${SSL_PORT} ssl;
+
+    server_name ${SERVER_NAME};
+    set $upstream ${BACKEND};
+
+    ssl_certificate ${SSL_CERT};
+    ssl_certificate_key ${SSL_CERT_KEY};
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:MozSSL:10m;
+    ssl_session_tickets off;
+
+    ssl_dhparam /etc/ssl/certs/dhparam-${SSL_DH_BITS}.pem;
+
+    ssl_protocols ${SSL_PROTOCOLS};
+    ssl_ciphers ${SSL_CIPHERS};
+    ssl_prefer_server_ciphers ${SSL_PREFER_CIPHERS};
+
+    ssl_stapling ${SSL_OCSP_STAPLING};
+    ssl_stapling_verify ${SSL_OCSP_STAPLING};
+
+    ssl_verify_client ${SSL_VERIFY};
+    ssl_verify_depth ${SSL_VERIFY_DEPTH};
+
+    PROXY_SSL_CONFIG
+
+    location / {
+        client_max_body_size 0;
+
+        #include includes/proxy_backend.conf;
+
+        index index.html index.htm;
+        #root /usr/share/nginx/html;
+        root /html-files;
+    }
+
+    include includes/location_common.conf;
+}
+```
+
+Here’s a breakdown of the environment variables in the configuration template:
+
+1. **`SERVER_TOKENS`**: Controls whether Nginx displays the version number in error messages and response headers. Common values are `on` (show version) and `off` (hide version).
+
+2. **`PORT`**: Defines the HTTP port that Nginx listens on for regular, non-SSL traffic. For local development, this could be `8080` or any other free port above 1024.
+
+3. **`SERVER_NAME`**: Specifies the hostname for the server. For local development, you can use `localhost`.
+
+4. **`NGINX_ALWAYS_TLS_REDIRECT`**: When set to `on`, it forces HTTP requests to redirect to HTTPS. If `off`, HTTP requests are served without redirection.
+
+5. **`SSL_PORT`**: The port that Nginx listens on for SSL/TLS-encrypted traffic. Since Nginx runs as an unprivileged user in the OWASP container, this should be `8443` (or another port above 1024).
+
+6. **`SSL_CERT` and `SSL_CERT_KEY`**: File paths for the SSL certificate and private key used to secure HTTPS connections. For local development, you can use self-signed certificates.
+
+7. **`SSL_DH_BITS`**: Specifies the bit-length of the Diffie-Hellman (DH) parameter file used to enhance encryption security. Typical values are `2048` or `4096` for production, though in practice, you may not need this locally.
+
+8. **`SSL_PROTOCOLS`**: Defines the supported SSL/TLS protocols. Common values include `TLSv1.2 TLSv1.3` to allow only secure protocols.
+
+9. **`SSL_CIPHERS`**: Specifies the ciphers used for SSL connections. This list generally includes only secure, strong ciphers in production, such as `ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384`.
+
+10. **`SSL_PREFER_CIPHERS`**: Controls whether the server’s cipher preferences are given priority over the client’s. Commonly set to `on`.
+
+11. **`SSL_OCSP_STAPLING`**: Enables OCSP (Online Certificate Status Protocol) stapling, which improves SSL handshake speed and security. Values are typically `on` or `off`.
+
+12. **`SSL_VERIFY` and `SSL_VERIFY_DEPTH`**: Configures client certificate verification. These settings are useful in setups where the server authenticates clients (e.g., mutual TLS). `SSL_VERIFY` is `on` to require client certificates, while `SSL_VERIFY_DEPTH` limits the certificate chain length.
+
+13. **`BACKEND`**: Sets an upstream server (e.g., `http://localhost:8000`) for proxying traffic. Since this configuration does not include `proxy_backend.conf`, you may not need this for basic testing.
+
+---
+
+**Dummy `.env` File for Local Development**
+
+In the end, this is my `dev.env`:
+
+```plaintext
+# As this is a dummy .env it can go to git
+SERVER_TOKENS=off
+PORT=8080
+SERVER_NAME=localhost
+NGINX_ALWAYS_TLS_REDIRECT=off
+SSL_PORT=8443
+#SSL_CERT=/etc/nginx/certs/self-signed.crt
+#SSL_CERT_KEY=/etc/nginx/certs/self-signed.key
+SSL_DH_BITS=2048
+SSL_PROTOCOLS=TLSv1.2 TLSv1.3
+#SSL_CIPHERS=ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+SSL_PREFER_CIPHERS=on
+SSL_OCSP_STAPLING=off
+SSL_VERIFY=off
+SSL_VERIFY_DEPTH=1
+BACKEND=http://localhost:8000
+```
+I have commented out the ssl cert references, and of course the docker-compose.yml needed to be modified. See the file.
+
+---
+
+In the end my simplified default.conf looks like this:
 
 ```conf
 # Nginx configuration for both HTTP and SSL
@@ -129,13 +281,13 @@ map $http_upgrade $connection_upgrade {
 }
 
 server {
-    listen 8080 default_server;
+    listen ${PORT} default_server;
 
-    server_name localhost;
-    set $upstream http://localhost:80;
-    set $always_redirect off;
+    server_name ${SERVER_NAME};
+    #set $upstream ${BACKEND};
+    set $always_redirect ${NGINX_ALWAYS_TLS_REDIRECT};
 
-    
+    #PROXY_SSL_CONFIG
 
     location / {
         client_max_body_size 0;
@@ -144,10 +296,11 @@ server {
             return 301 https://$host$request_uri;
         }
 
-        include includes/proxy_backend.conf;
+        #include includes/proxy_backend.conf;
 
         index index.html index.htm;
-        root /usr/share/nginx/html;
+        #root /usr/share/nginx/html;
+        root /html-files;
     }
 
     include includes/location_common.conf;
@@ -155,64 +308,41 @@ server {
 }
 
 server {
-    listen 8443 ssl;
+    listen ${SSL_PORT} ssl;
 
-    server_name localhost;
-    set $upstream http://localhost:80;
+    server_name ${SERVER_NAME};
+    #set $upstream ${BACKEND};
 
-    ssl_certificate /etc/nginx/conf/server.crt;
-    ssl_certificate_key /etc/nginx/conf/server.key;
+    ssl_certificate ${SSL_CERT};
+    ssl_certificate_key ${SSL_CERT_KEY};
     ssl_session_timeout 1d;
     ssl_session_cache shared:MozSSL:10m;
     ssl_session_tickets off;
 
-    ssl_dhparam /etc/ssl/certs/dhparam-2048.pem;
+    #ssl_dhparam /etc/ssl/certs/dhparam-${SSL_DH_BITS}.pem;
 
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
+    ssl_protocols ${SSL_PROTOCOLS};
+    ssl_ciphers ${SSL_CIPHERS};
+    ssl_prefer_server_ciphers ${SSL_PREFER_CIPHERS};
 
-    ssl_stapling on;
-    ssl_stapling_verify on;
+    #ssl_stapling ${SSL_OCSP_STAPLING};
+    #ssl_stapling_verify ${SSL_OCSP_STAPLING};
 
-    ssl_verify_client off;
-    ssl_verify_depth 1;
+    #ssl_verify_client ${SSL_VERIFY};
+    #ssl_verify_depth ${SSL_VERIFY_DEPTH};
 
-    
+    #PROXY_SSL_CONFIG
 
     location / {
         client_max_body_size 0;
 
-        include includes/proxy_backend.conf;
+        #include includes/proxy_backend.conf;
 
         index index.html index.htm;
-        root /usr/share/nginx/html;
+        #root /usr/share/nginx/html;
+        root /html-files;
     }
 
     include includes/location_common.conf;
 }
 ```
-
-And the original nginx.conf looked like this:
-
-```conf
-load_module modules/ngx_http_modsecurity_module.so;
-
-worker_processes auto;
-pid /tmp/nginx.pid;
-
-events {
-    worker_connections 1024;
-}
-
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-    keepalive_timeout 60s;
-    sendfile on;
-
-    resolver 127.0.0.11 valid=5s;
-    include /etc/nginx/conf.d/*.conf;
-}
-```
-

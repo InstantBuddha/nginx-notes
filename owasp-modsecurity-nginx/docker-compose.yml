@@ -1,0 +1,20 @@
+services:
+  nginx-modsecurity:
+    image: owasp/modsecurity-crs:4.7.0-nginx-202410090410
+    ports:
+      - "8080:8080" # Use ports 8080 and 8443 as specified by the documentation.
+      - "8443:8443"
+    environment:
+      SERVERNAME: localhost
+      PARANOIA: 1
+      BLOCKING_PARANOIA: 1
+      ANOMALY_INBOUND: 5
+      ANOMALY_OUTBOUND: 4
+    volumes:
+      - ./html-files:/html-files
+      # Mount default.conf as a template
+      - ./nginx-config/conf.d/default.conf:/etc/nginx/templates/conf.d/default.conf.template
+      # Mount nginx.conf as a template
+      - ./nginx-config/nginx.conf:/etc/nginx/templates/nginx.conf.template
+    env_file:
+      - ./dev.env  
