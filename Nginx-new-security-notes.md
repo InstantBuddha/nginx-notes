@@ -346,3 +346,109 @@ server {
     include includes/location_common.conf;
 }
 ```
+
+## Basic checks
+
+Here are some basic `curl` commands to test how ModSecurity is working with these security configurations on your localhost. These commands will help you verify rule blocking, anomaly scoring, and basic HTTP responses from your server.
+
+1. **Basic HTTP Request**
+   - This verifies that the server responds normally to simple requests.
+   ```bash
+   curl -i http://localhost:8080
+   ```
+   - You should receive a `200 OK` response if everything is set up correctly.
+
+2. **Sending a Known Malicious Pattern**
+   - ModSecurity should catch requests containing SQL injection or XSS attack patterns, which are common security risks. These requests should trigger CRS rules and potentially block access.
+
+   **Example of SQL Injection:**
+   ```bash
+   curl -i "http://localhost:8080/?id=1 OR 1=1"
+   ```
+   - **Expected Outcome**: If ModSecurity detects this, it will either block the request or return a 403 Forbidden status depending on your `PARANOIA` level and `ANOMALY_INBOUND` threshold.
+
+   **Example of Cross-Site Scripting (XSS):**
+   ```bash
+   curl -i "http://localhost:8080/?q=<script>alert('xss')</script>"
+   ```
+   - **Expected Outcome**: ModSecurity should flag or block this request due to XSS rule detection.
+
+3. **Testing with Headers Known to Be Restricted**
+   - Some headers might be restricted in security configurations. For example, sending a `Proxy` header could be restricted by ModSecurity.
+
+   ```bash
+   curl -i -H "Proxy: http://malicious.com" http://localhost:8080
+   ```
+   - **Expected Outcome**: ModSecurity should either flag or block this request if `RESTRICTED_HEADERS_BASIC` or `RESTRICTED_HEADERS_EXTENDED` is configured to catch `Proxy`.
+
+4. **Sending a Large Number of Parameters (High Anomaly Score)**
+   - To see how ModSecurity handles requests with a high anomaly score, you can send a URL with many parameters. If `MAX_NUM_ARGS` or `TOTAL_ARG_LENGTH` thresholds are configured, ModSecurity should catch this.
+
+   ```bash
+   curl -i "http://localhost:8080/?param1=a&param2=b&param3=c&...&param50=z"
+   ```
+   - **Expected Outcome**: Requests with an excessive number of parameters should be flagged or blocked, depending on your configured `ANOMALY_INBOUND` threshold.
+
+5. **Testing with Unauthorized HTTP Methods**
+   - Test unsupported or restricted HTTP methods like `TRACE` or `DELETE`. ModSecurity should block or flag these requests based on rules.
+
+   ```bash
+   curl -i -X TRACE http://localhost:8080
+   ```
+   - **Expected Outcome**: ModSecurity will likely block or flag this as a suspicious method.
+
+6. **PHP Injection and Backdoor Detection Attempt**
+  ```bash
+  curl -i "http://localhost:8080/?XDEBUG_SESSION_START=phpstorm"
+  ```
+  In this case, the rule that likely blocked this request is 941160, titled "Methodology: Detects PHP Injection and Backdoor Detection Attempt". This rule, part of the OWASP ModSecurity Core Rule Set (CRS), is specifically designed to flag potentially suspicious PHP parameters (like XDEBUG_SESSION_START) often associated with debugging or probing attempts.
+
+  Rule 941160 functions under the following settings:
+
+  - Paranoia Level 1: This rule is active at even the base paranoia level, meaning it would alert or block even in the most moderate CRS configuration.
+  - Anomaly Threshold: The rule contributes a score to the total inbound anomaly score; with your ANOMALY_INBOUND set at 5, if the cumulative score reaches or exceeds this threshold, it will trigger a block.
+
+## Setting up persistent logs
+
+Adding a bind mount for the logs works but only if the permissions are set right.
+
+```yml
+services:
+  nginx-modsecurity:
+    image: owasp/modsecurity-crs:4.7.0-nginx-202410090410
+    ports:
+      - "8080:8080" # Use ports 8080 and 8443 as specified by the documentation.
+      - "8443:8443"
+    environment:
+      SERVERNAME: localhost
+      PARANOIA: 1 #the default and provides a balanced level of security with fewer false positives (4 is max)
+      BLOCKING_PARANOIA: 1 #rules that block traffic based on detected issues
+      ANOMALY_INBOUND: 5 #A setting of 5 is a standard threshold for balanced protection without overly sensitive blocking
+      ANOMALY_OUTBOUND: 4 #Outbound checks focus on responses going back to the client
+      MODSEC_AUDIT_LOG: /var/log/nginx/modsec_audit.log
+      MODSEC_AUDIT_LOG_FORMAT: JSON
+    volumes:
+      - ./html-files:/html-files
+      # Mount default.conf as a template:
+      - ./nginx-config/conf.d/default.conf:/etc/nginx/templates/conf.d/default.conf.template
+      # Mount nginx.conf as a template:
+      - ./nginx-config/nginx.conf:/etc/nginx/templates/nginx.conf.template
+      # Mount a logs directory on the host:
+      - ./logs:/var/log/nginx  
+    env_file:
+      - ./dev.env  
+```
+
+As the created logs files had the owner of systemd-resolve in the group of systemd-journal, modifying the ownership of the logs folder to these works, and now the access can be limited to 750.
+
+```bash
+sudo chmod -R 750 ./logs
+
+sudo chown -R systemd-resolve:systemd-journal ./logs
+```
+
+However, with these permission levels the main user of the system does not see the contents of the folder. Therefore, in order to view the access logs, we need to use:
+
+```bash
+sudo cat ./logs/access.log
+```
