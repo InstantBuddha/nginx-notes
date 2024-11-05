@@ -21,5 +21,7 @@ services:
       - ./nginx-config/nginx.conf:/etc/nginx/templates/nginx.conf.template
       # Mount a logs directory on the host:
       - ./logs:/var/log/nginx  
+      - ./certbot/www:/var/www/certbot/:ro
+      - ./certbot/conf/:/etc/nginx/ssl/:ro
     env_file:
-      - ./dev.env  
+      - ./dev.env

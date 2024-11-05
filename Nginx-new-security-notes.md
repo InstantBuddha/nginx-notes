@@ -452,3 +452,50 @@ However, with these permission levels the main user of the system does not see t
 ```bash
 sudo cat ./logs/access.log
 ```
+
+## Mimicking Let's Encrypt Certbot
+
+I did everything to mimic Let's Encrypt certbot on localhost.
+
+1. I have added the volumes in the docker-compose.yml.
+```yml
+      - ./certbot/www:/var/www/certbot/:ro
+      - ./certbot/conf/:/etc/nginx/ssl/:ro
+```
+2. I have created the following directory structure (at this point without fullchain.pem and privkey.pem):
+certbot/
+└── conf/
+    └── live/
+        └── localhost/
+            ├── fullchain.pem
+            └── privkey.pem
+└── www/
+
+3. Ran the following command inside the localhost folder:
+```bash
+openssl req -x509 -out localhost.crt -keyout localhost.key \
+  -newkey rsa:2048 -nodes -sha256 \
+  -subj '/CN=localhost' -extensions EXT -config <( \
+   printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
+```
+
+4. Renamed the files:
+```bash
+mv localhost.key ./certbot/conf/privkey.pem
+mv localhost.crt ./certbot/conf/fullchain.pem
+```
+
+5. Then, set the permissions right:
+   
+```bash
+chmod 644 ./certbot/conf/live/localhost/privkey.pem
+chmod -R 755 ./certbot/conf/live/localhost/
+```
+
+6. The working ssl can be checked with:
+```bash
+curl -vk https://localhost:8443
+```
+
+[Some useful info in the Let's Encrypt documentation](https://letsencrypt.org/docs/certificates-for-localhost/)
+
