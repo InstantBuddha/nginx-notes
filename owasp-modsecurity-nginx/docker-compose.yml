@@ -3,8 +3,8 @@ services:
     image: owasp/modsecurity-crs:4.7.0-nginx-202410090410
     container_name: modsecurity-nginx
     ports:
-      - "8080:8080" # Use ports 8080 and 8443 as specified by the documentation.
-      - "8443:8443"
+      - "80:80"
+      - "443:443"
     environment:
       SERVERNAME: localhost
       PARANOIA: 1 #the default and provides a balanced level of security with fewer false positives (4 is max)
@@ -20,7 +20,7 @@ services:
       # Mount nginx.conf as a template:
       - ./nginx-config/nginx.conf:/etc/nginx/templates/nginx.conf.template
       # Mount a logs directory on the host:
-      - ./logs:/var/log/nginx  
+      - ./logs:/var/log/nginx
       - ./certbot/www:/var/www/certbot/:ro
       - ./certbot/conf/:/etc/nginx/ssl/:ro
     env_file:

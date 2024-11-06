@@ -457,12 +457,12 @@ sudo cat ./logs/access.log
 
 I did everything to mimic Let's Encrypt certbot on localhost.
 
-1. I have added the volumes in the docker-compose.yml.
+1. I have added the volumes in the docker-compose.yml, furthermore the ports needed to be changed to "80:80"and "443:443".
 ```yml
       - ./certbot/www:/var/www/certbot/:ro
       - ./certbot/conf/:/etc/nginx/ssl/:ro
 ```
-2. I have created the following directory structure (at this point without fullchain.pem and privkey.pem):
+1. I have created the following directory structure (at this point without fullchain.pem and privkey.pem):
 certbot/
 └── conf/
     └── live/
@@ -471,7 +471,7 @@ certbot/
             └── privkey.pem
 └── www/
 
-3. Ran the following command inside the localhost folder:
+1. Ran the following command inside the localhost folder:
 ```bash
 openssl req -x509 -out localhost.crt -keyout localhost.key \
   -newkey rsa:2048 -nodes -sha256 \
@@ -479,13 +479,13 @@ openssl req -x509 -out localhost.crt -keyout localhost.key \
    printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
 ```
 
-4. Renamed the files:
+1. Renamed the files:
 ```bash
 mv localhost.key ./certbot/conf/privkey.pem
 mv localhost.crt ./certbot/conf/fullchain.pem
 ```
 
-5. Then, set the permissions right:
+1. Then, set the permissions right:
    
 ```bash
 chmod 644 ./certbot/conf/live/localhost/privkey.pem
@@ -494,8 +494,74 @@ chmod -R 755 ./certbot/conf/live/localhost/
 
 6. The working ssl can be checked with:
 ```bash
-curl -vk https://localhost:8443
+curl -vk https://localhost
 ```
 
 [Some useful info in the Let's Encrypt documentation](https://letsencrypt.org/docs/certificates-for-localhost/)
 
+
+## default.conf overhaul
+
+In the first server block, the lines:
+```conf
+server {
+    listen 80 default_server; #for IPv4
+    listen [::]:80 default_server; #for IPv6
+    #...
+}
+```    
+Are for traffic from both IPv4 and IPv6 clients
+
+### ssl ciphers
+
+A [really good article on the topic](https://www.namecheap.com/blog/beginners-guide-to-tls-cipher-suites/).
+
+The [Mozzila nginx config setup page](https://ssl-config.mozilla.org/).
+I just added the Mozilla's default setup here.
+
+### OCSP stapling
+
+Certbot placed a readme file in the directory that needs to be used for the certificates:
+```md
+This directory contains your keys and certificates.
+
+`privkey.pem`  : the private key for your certificate.
+`fullchain.pem`: the certificate file used in most server software.
+`chain.pem`    : used for OCSP stapling in Nginx >=1.3.7.
+`cert.pem`     : will break many server configurations, and should not be used
+                 without reading further documentation (see link below).
+
+WARNING: DO NOT MOVE OR RENAME THESE FILES!
+         Certbot expects these files to remain in this location in order
+         to function properly!
+
+We recommend not moving these files. For more information, see the Certbot
+User Guide at https://certbot.eff.org/docs/using.html#where-are-my-certificates.
+```
+
+Therefore, I assume the same filepath needs to be used as with the ssl certificates.
+
+```conf
+ssl_trusted_certificate /etc/nginx/ssl/live/localhost/fullchain.pem;
+```
+
+As this is a development localhost project, this warning from Nginx is ok:
+`modsecurity-nginx  | nginx: [warn] "ssl_stapling" ignored, no OCSP responder URL in the certificate "/etc/nginx/ssl/live/localhost/fullchain.pem"`
+
+### NOT Adding dhparam
+
+**DHPARAM IS NOT NEEDED** as X25519 key exchange method is already works. However, this is how I added dhparam.
+**I removed it afterwords!**
+1. Created the /dhparam folder
+2. I manually created a dhparam.pem file and copied the contents of the following command into it:
+  ```bash
+  curl https://ssl-config.mozilla.org/ffdhe2048.txt
+  ```
+3. I added the line to the default.conf:
+  ```conf
+    ssl_dhparam /etc/nginx/dhparam/dhparam.pem;
+  ```      
+4. The setup can be tested with:
+  ```bash
+  openssl s_client -connect localhost:443 -servername localhost
+  ```
