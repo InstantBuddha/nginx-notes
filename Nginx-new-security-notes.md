@@ -408,6 +408,31 @@ Here are some basic `curl` commands to test how ModSecurity is working with thes
   - Paranoia Level 1: This rule is active at even the base paranoia level, meaning it would alert or block even in the most moderate CRS configuration.
   - Anomaly Threshold: The rule contributes a score to the total inbound anomaly score; with your ANOMALY_INBOUND set at 5, if the cumulative score reaches or exceeds this threshold, it will trigger a block.
 
+7. A few simple local file inclusion attacks and others to test
+```bash
+curl --insecure https://localhost/index.html?exec=/bin/bash
+curl --insecure https://localhost/index.html?exec=/etc/passwd
+curl --insecure https://localhost/index.html?exec=/bin/sh
+curl --insecure https://localhost/index.html?exec=/tmp/
+curl --insecure "https://localhost/?exec=ls%20/etc"
+curl --insecure "https://localhost/index.html?exec=cat%20/etc/passwd"
+curl --insecure "https://localhost/index.html?exec=rm%20-rf%20/tmp/*"
+curl --insecure "https://localhost/index.html?query=<script>alert(1)</script>"
+curl --insecure "https://localhost/index.html?exec=ls%20/usr/local/bin"
+# Not allowed methods
+curl -X PUT --insecure "https://localhost/index.html" -d "data=example"
+curl -X DELETE --insecure "https://localhost/index.html"
+curl -X OPTIONS --insecure "https://localhost/index.html"
+curl -X TRACE --insecure "https://localhost/index.html"
+curl -X CONNECT --insecure "https://localhost/index.html"
+curl -X PATCH --insecure "https://localhost/index.html" -d "data=example"
+curl -X PUT --insecure "https://localhost/index.html" -d "exec=/bin/bash"
+#Hidden files:
+curl --insecure "https://localhost/index.html?exec=cat%20.git/config"
+curl --insecure "https://localhost/index.html?exec=cat%20.env"
+#This last one returns index.html without doing anything else
+curl --insecure https://localhost/index.html?exec=/usr/local/bin/
+```
 ## Setting up persistent logs
 
 Adding a bind mount for the logs works but only if the permissions are set right.
@@ -451,6 +476,11 @@ However, with these permission levels the main user of the system does not see t
 
 ```bash
 sudo cat ./logs/access.log
+#or
+sudo cat ./logs/access.log > ./nginx_access_log_export.txt
+#or
+sudo cat ./logs/modsec_audit.log > ./modsec_audit_export.json
+
 ```
 
 ## Mimicking Let's Encrypt Certbot
@@ -512,12 +542,15 @@ server {
 ```    
 Are for traffic from both IPv4 and IPv6 clients
 
+Following this for the setup:
+
+The **really useful** [Mozzila nginx config setup page](https://ssl-config.mozilla.org/).
+I just added the Mozilla's default setup here.
+
 ### ssl ciphers
 
 A [really good article on the topic](https://www.namecheap.com/blog/beginners-guide-to-tls-cipher-suites/).
 
-The [Mozzila nginx config setup page](https://ssl-config.mozilla.org/).
-I just added the Mozilla's default setup here.
 
 ### OCSP stapling
 
@@ -565,3 +598,10 @@ As this is a development localhost project, this warning from Nginx is ok:
   ```bash
   openssl s_client -connect localhost:443 -servername localhost
   ```
+
+## Overall thoughts and Paranoia levels
+
+It seems that most security measures became redundant or almost useless when adding ModSecurity.
+
+There is a [good description of Paranoia levels and rulesets](https://coreruleset.org/20211028/working-with-paranoia-levels/).
+

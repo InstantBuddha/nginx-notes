@@ -7,10 +7,10 @@ services:
       - "443:443"
     environment:
       SERVERNAME: localhost
-      PARANOIA: 1 #the default and provides a balanced level of security with fewer false positives (4 is max)
-      BLOCKING_PARANOIA: 1 #rules that block traffic based on detected issues
-      ANOMALY_INBOUND: 5 #A setting of 5 is a standard threshold for balanced protection without overly sensitive blocking
-      ANOMALY_OUTBOUND: 4 #Outbound checks focus on responses going back to the client
+      PARANOIA: 2 #slightly higher than basic
+      BLOCKING_PARANOIA: 2 #slightly higher than basic
+      ANOMALY_INBOUND: 4
+      ANOMALY_OUTBOUND: 3
       MODSEC_AUDIT_LOG: /var/log/nginx/modsec_audit.log
       MODSEC_AUDIT_LOG_FORMAT: JSON
     volumes:
