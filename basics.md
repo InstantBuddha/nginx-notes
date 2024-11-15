@@ -13,6 +13,12 @@ Based on [this video](https://www.youtube.com/watch?app=desktop&v=9t9Mp0BGnyI)
   - [Redirects](#redirects)
   - [Rewrites](#rewrites)
   - [Load balancing](#load-balancing)
+  - [Host Headers](#host-headers)
+  - [Changing nginx.conf](#changing-nginxconf)
+  - [Nginx Caching](#nginx-caching)
+    - [Proxy caching](#proxy-caching)
+    - [Client side browser caching](#client-side-browser-caching)
+    - [Browser caching](#browser-caching)
 
 
 ## Terminology
@@ -342,3 +348,114 @@ server {
 
 With this configuration, nginx will act as a reverse proxy and load balancer, distributing incoming requests across multiple backend servers (`127.0.0.1:1111` and `127.0.0.1:2222`). This setup improves scalability, reliability, and performance by distributing the request load across multiple servers.
 
+## Host Headers
+
+The Host header is a core HTTP feature that enables virtual hosting by letting servers differentiate between sites hosted on the same IP. Nginx, Apache, and most web servers rely on this header to route incoming requests appropriately, ensuring each domain receives the correct content.
+
+A [funny experiment on messwithdns.net](https://messwithdns.net/)
+
+[My notes on Host Headers and shared ip addresses with Nginx](Host-headers-and-shared-ip-addresses.md)
+
+## Changing nginx.conf
+
+It might be edited. This caused the duplicate mime.types earlier. 
+
+It needs to be edited to enable proxy caching.
+
+In the docker-compose.yml I added the following:
+```yml
+# Nginx Service
+  webserver:
+    image: nginx:1.26.0-alpine
+    container_name: webserver
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      #- ./:/var/www
+      #- ./public:/var/www/public #this is probably for Laravel's frontend
+      - ./filozofiahu:/filozofiahu:ro #make it read only for added security
+      - ./nginx-config/conf.d:/etc/nginx/conf.d/:ro #directory of default.conf
+      - ./nginx-config/nginx.conf:/etc/nginx/nginx.conf:ro  # Bind only nginx.conf FILE!
+      - ./certbot/www:/var/www/certbot/:ro
+      - ./certbot/conf/:/etc/nginx/ssl/:ro
+      - nginx-cache:/var/lib/nginx/cache  # Mount volume for cache
+    networks:
+      - filo-app-network
+    # other things
+volumes:
+    db-data:
+    nginx-cache:
+```
+
+For this setup inside the nginx
+The folder structure for this is:
+
+nginx-config
+├── conf.d
+│   └── default.conf
+└── nginx.conf
+
+For this I copied the original nginx.conf from the container.
+
+## Nginx Caching
+
+See previous point for yml setup and folder structure.
+
+### Proxy caching
+Inside nginx.conf
+```conf
+http {
+    # Proxy cache path configuration at the http level
+    proxy_cache_path /var/lib/nginx/cache levels=1 keys_zone=frontend_cache:120m max_size=1024m;
+
+}
+```
+
+Inside default.conf
+```conf
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    # ...
+    # for proxy caching it would work:
+        #proxy_cache frontend_cache;
+}
+```
+
+### Client side browser caching
+Might be unnecessary
+
+in default.conf
+```conf
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+# ...
+    location / {
+        root /filozofiahu/build;
+        try_files $uri /index.html;        
+    }
+ 
+    location ~* \.(jpg|JPG|jpeg|png|gif)$ {
+        root /filozofiahu/build;
+        expires 1M;  # Cache images for 1 month (adjust as needed)
+        access_log off;  # Optional: Enable access logging if desired
+        add_header Cache-Control "public, max-age=2629746";  # Cache for 1 month
+    }
+
+    location ~* \.(?:css|js)$ {
+        root /filozofiahu/build;
+        expires 1M;
+        access_log off;
+        add_header Cache-Control "public, max-age=2629746";
+    }
+}
+```
+
+### Browser caching
+
+Might not be needed

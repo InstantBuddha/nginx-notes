@@ -1,0 +1,11 @@
+services:
+  nginx-practice:
+    image: nginx:latest
+    container_name: nginx-practice-host-headers
+    ports:
+      - "80:80"
+    volumes:
+      - ./example-dot-com-files:/var/www/example/
+      - ./anotherdomain-dot-com-files:/var/www/anotherdomain/
+      - ./nginx-config/conf.d:/etc/nginx/conf.d/:ro #directory of default.conf
+      - ./nginx-config/nginx.conf:/etc/nginx/nginx.conf:ro  # Bind only nginx.conf FILE!

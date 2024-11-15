@@ -278,6 +278,8 @@ This way, you can have rate limits that protect against malicious activity while
 
 ## Django Admin Login Rate Limiting
 
+An other really good [resource on the topic of rate limiting](https://blog.nginx.org/blog/rate-limiting-nginx)
+
 1. Move the rate limiting rule to location /admin/login/
   Here, burst and delay are enabled.
 
