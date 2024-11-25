@@ -5,6 +5,7 @@
   - [My Nginx mastery course notes](#my-nginx-mastery-course-notes)
   - [My new Nginx security notes](#my-new-nginx-security-notes)
   - [Host Headers and Shared ip addresses](#host-headers-and-shared-ip-addresses)
+  - [Host Headers and Shared ip addresses with the OWASP ModSecurity+Nginx setup](#host-headers-and-shared-ip-addresses-with-the-owasp-modsecuritynginx-setup)
   - [My Nginx old security rules notes](#my-nginx-old-security-rules-notes)
   - [Reload nginx](#reload-nginx)
   - [Curl to check nginx](#curl-to-check-nginx)
@@ -26,6 +27,10 @@ My new, more organized security notes are collected [in this file](Nginx-new-sec
 ## Host Headers and Shared ip addresses
 
 [My notes on Host Headers and shared ip addresses with Nginx](Host-headers-and-shared-ip-addresses.md)
+
+## Host Headers and Shared ip addresses with the OWASP ModSecurity+Nginx setup
+
+[My notes on how to set up two domain names on the same ip address and forward traffic using the OWASP ModSecurity+Nginx container to do that. ](ModSecurity-with-two-domains.md) In this case the HTML files are served by the two additional Dockerized Nginx instances.
 
 ## My Nginx old security rules notes
 

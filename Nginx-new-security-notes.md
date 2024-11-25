@@ -2,6 +2,23 @@
 
 - [Nginx new security notes](#nginx-new-security-notes)
   - [server\_tokens and proxy\_hide\_header](#server_tokens-and-proxy_hide_header)
+  - [Other security header options](#other-security-header-options)
+    - [1. **Information Disclosure (Server Header)**](#1-information-disclosure-server-header)
+    - [2. **Leaking Backend Technology (X-Powered-By Header)**](#2-leaking-backend-technology-x-powered-by-header)
+    - [3. **Upstream Load Balancer or Application Information (Via Header)**](#3-upstream-load-balancer-or-application-information-via-header)
+    - [4. **Exposing Authentication Methods (WWW-Authenticate Header)**](#4-exposing-authentication-methods-www-authenticate-header)
+    - [5. **Exposing Web Application Firewall (X-Frame-Options, X-Content-Type-Options)**](#5-exposing-web-application-firewall-x-frame-options-x-content-type-options)
+  - [Nginx OWASP/ModSecurity-crs](#nginx-owaspmodsecurity-crs)
+    - [First run](#first-run)
+    - [owasp default.conf explained](#owasp-defaultconf-explained)
+  - [Basic checks](#basic-checks)
+  - [Setting up persistent logs](#setting-up-persistent-logs)
+  - [Mimicking Let's Encrypt Certbot](#mimicking-lets-encrypt-certbot)
+  - [default.conf overhaul](#defaultconf-overhaul)
+    - [ssl ciphers](#ssl-ciphers)
+    - [OCSP stapling](#ocsp-stapling)
+    - [NOT Adding dhparam](#not-adding-dhparam)
+  - [Overall thoughts and Paranoia levels](#overall-thoughts-and-paranoia-levels)
 
 
 ## server_tokens and proxy_hide_header
@@ -492,7 +509,7 @@ I did everything to mimic Let's Encrypt certbot on localhost.
       - ./certbot/www:/var/www/certbot/:ro
       - ./certbot/conf/:/etc/nginx/ssl/:ro
 ```
-1. I have created the following directory structure (at this point without fullchain.pem and privkey.pem):
+2. I have created the following directory structure (at this point without fullchain.pem and privkey.pem):
 certbot/
 └── conf/
     └── live/
@@ -501,7 +518,7 @@ certbot/
             └── privkey.pem
 └── www/
 
-1. Ran the following command inside the localhost folder:
+3. Ran the following command inside the localhost folder:
 ```bash
 openssl req -x509 -out localhost.crt -keyout localhost.key \
   -newkey rsa:2048 -nodes -sha256 \
@@ -509,13 +526,13 @@ openssl req -x509 -out localhost.crt -keyout localhost.key \
    printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
 ```
 
-1. Renamed the files:
+4. Renamed the files:
 ```bash
 mv localhost.key ./certbot/conf/privkey.pem
 mv localhost.crt ./certbot/conf/fullchain.pem
 ```
 
-1. Then, set the permissions right:
+5. Then, set the permissions right:
    
 ```bash
 chmod 644 ./certbot/conf/live/localhost/privkey.pem

@@ -1,0 +1,41 @@
+services:
+  nginx-modsecurity:
+    image: owasp/modsecurity-crs:4.7.0-nginx-202410090410
+    container_name: modsecurity-reverse-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SERVERNAME: localhost
+      PARANOIA: 2 #slightly higher than basic
+      BLOCKING_PARANOIA: 2 #slightly higher than basic
+      ANOMALY_INBOUND: 4
+      ANOMALY_OUTBOUND: 3
+      MODSEC_AUDIT_LOG: /var/log/nginx/modsec_audit.log
+      MODSEC_AUDIT_LOG_FORMAT: JSON
+    volumes:
+      # Mount default.conf as a template:
+      - ./modsecurity-nginx/nginx-config/conf.d/default.conf:/etc/nginx/templates/conf.d/default.conf.template
+      # Mount nginx.conf as a template:
+      - ./modsecurity-nginx/nginx-config/nginx.conf:/etc/nginx/templates/nginx.conf.template
+      # Mount a logs directory on the host:
+      - ./modsecurity-nginx/logs:/var/log/nginx
+      # For certbot:
+      - ./certbot/www:/var/www/certbot/:ro
+      - ./certbot/conf/:/etc/nginx/ssl/:ro
+    env_file:
+      - ./dev.env
+  nginx-example-dot-com:
+    image: nginx:latest
+    container_name: nginx-example-dot-com
+    volumes:
+      - ./example-dot-com-nginx/example-dot-com-files:/var/www/example/
+      - ./example-dot-com-nginx/nginx-config/conf.d:/etc/nginx/conf.d/:ro #directory of default.conf
+      - ./example-dot-com-nginx/nginx-config/nginx.conf:/etc/nginx/nginx.conf:ro  # Bind only nginx.conf FILE!
+  nginx-anotherdomain-dot-com:
+    image: nginx:latest
+    container_name: nginx-anotherdomain-dot-com
+    volumes:
+      - ./anotherdomain-dot-com-nginx/anotherdomain-dot-com-files:/var/www/anotherdomain/
+      - ./anotherdomain-dot-com-nginx/nginx-config/conf.d:/etc/nginx/conf.d/:ro #directory of default.conf
+      - ./anotherdomain-dot-com-nginx/nginx-config/nginx.conf:/etc/nginx/nginx.conf:ro  # Bind only nginx.conf FILE!
